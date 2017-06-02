@@ -198,8 +198,10 @@ func (s *ServerStreamWrapper) RecvMsg(m interface{}) error {
 func GRPCStreamServerInterceptor(tc *Client) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		md, _ := metadata.FromIncomingContext(ss.Context())
+		log.Printf("intercepting server")
 		if header, ok := md[grpcMetadataKey]; ok {
 			span := tc.SpanFromHeader("", strings.Join(header, ""))
+			log.Printf(" intercept trace %s", span.TraceID())
 			defer func() {
 				log.Printf(" defer finishing trace %s", span.TraceID())
 				span.Finish()
