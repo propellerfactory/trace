@@ -199,6 +199,7 @@ func GRPCStreamServerInterceptor(tc *Client) grpc.StreamServerInterceptor {
 		md, _ := metadata.FromIncomingContext(ss.Context())
 		if header, ok := md[grpcMetadataKey]; ok {
 			span := tc.SpanFromHeader("", strings.Join(header, ""))
+			defer span.Finish()
 			ctx := NewContext(ss.Context(), span)
 			ss = &ServerStreamWrapper{stream: ss, span: span, context: ctx}
 		}
