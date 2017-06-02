@@ -21,6 +21,7 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"log"
 )
 
 const grpcMetadataKey = "x-cloud-trace-context"
@@ -199,7 +200,10 @@ func GRPCStreamServerInterceptor(tc *Client) grpc.StreamServerInterceptor {
 		md, _ := metadata.FromIncomingContext(ss.Context())
 		if header, ok := md[grpcMetadataKey]; ok {
 			span := tc.SpanFromHeader("", strings.Join(header, ""))
-			defer span.Finish()
+			defer func() {
+				log.Printf(" defer finishing trace %s", span.TraceID())
+				span.Finish()
+			}()
 			ctx := NewContext(ss.Context(), span)
 			ss = &ServerStreamWrapper{stream: ss, span: span, context: ctx}
 		}
