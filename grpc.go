@@ -179,6 +179,7 @@ func (s *ServerStreamWrapper) Context() context.Context {
 func (s *ServerStreamWrapper) SendMsg(m interface{}) error {
 	err := s.stream.SendMsg(m)
 	if err != nil && s.span != nil {
+		log.Printf(" finishing trace %s", s.span.TraceID())
 		s.span.Finish()
 	}
 	return err
@@ -187,6 +188,7 @@ func (s *ServerStreamWrapper) SendMsg(m interface{}) error {
 func (s *ServerStreamWrapper) RecvMsg(m interface{}) error {
 	err := s.stream.RecvMsg(m)
 	if err != nil && s.span != nil {
+		log.Printf(" finishing trace %s", s.span.TraceID())
 		s.span.Finish()
 	}
 	return err
