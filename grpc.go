@@ -85,31 +85,31 @@ func GRPCServerInterceptor(tc *Client) grpc.UnaryServerInterceptor {
 // Deprecated: Use option.WithGRPCDialOption(grpc.WithUnaryInterceptor(GRPCClientInterceptor())) instead.
 var EnableGRPCTracing option.ClientOption = option.WithGRPCDialOption(grpc.WithUnaryInterceptor(GRPCClientInterceptor()))
 
-type StreamWrapper struct {
+type ClientStreamWrapper struct {
 	stream grpc.ClientStream
 	span   *Span
 }
 
-func (s *StreamWrapper) Header() (metadata.MD, error) {
+func (s *ClientStreamWrapper) Header() (metadata.MD, error) {
 	return s.stream.Header()
 }
 
-func (s *StreamWrapper) Trailer() metadata.MD {
+func (s *ClientStreamWrapper) Trailer() metadata.MD {
 	return s.stream.Trailer()
 }
 
-func (s *StreamWrapper) CloseSend() error {
+func (s *ClientStreamWrapper) CloseSend() error {
 	if s.span != nil {
 		s.span.Finish()
 	}
 	return s.stream.CloseSend()
 }
 
-func (s *StreamWrapper) Context() context.Context {
+func (s *ClientStreamWrapper) Context() context.Context {
 	return s.stream.Context()
 }
 
-func (s *StreamWrapper) SendMsg(m interface{}) error {
+func (s *ClientStreamWrapper) SendMsg(m interface{}) error {
 	err := s.stream.SendMsg(m)
 	if err != nil && s.span != nil {
 		s.span.Finish()
@@ -117,7 +117,7 @@ func (s *StreamWrapper) SendMsg(m interface{}) error {
 	return err
 }
 
-func (s *StreamWrapper) RecvMsg(m interface{}) error {
+func (s *ClientStreamWrapper) RecvMsg(m interface{}) error {
 	err := s.stream.RecvMsg(m)
 	if err != nil && s.span != nil {
 		s.span.Finish()
@@ -151,5 +151,55 @@ func grpcStreamClientInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc 
 		span.Finish()
 		return nil, err
 	}
-	return &StreamWrapper{stream: cs, span: span}, nil
+	return &ClientStreamWrapper{stream: cs, span: span}, nil
+}
+
+type ServerStreamWrapper struct {
+	stream  grpc.ServerStream
+	span    *Span
+	context context.Context
+}
+
+func (s *ServerStreamWrapper) SetHeader(md metadata.MD) error {
+	return s.stream.SetHeader(md)
+}
+
+func (s *ServerStreamWrapper) SendHeader(md metadata.MD) error {
+	return s.stream.SendHeader(md)
+}
+
+func (s *ServerStreamWrapper) SetTrailer(md metadata.MD) {
+	s.stream.SetTrailer(md)
+}
+
+func (s *ServerStreamWrapper) Context() context.Context {
+	return s.context
+}
+
+func (s *ServerStreamWrapper) SendMsg(m interface{}) error {
+	err := s.stream.SendMsg(m)
+	if err != nil && s.span != nil {
+		s.span.Finish()
+	}
+	return err
+}
+
+func (s *ServerStreamWrapper) RecvMsg(m interface{}) error {
+	err := s.stream.RecvMsg(m)
+	if err != nil && s.span != nil {
+		s.span.Finish()
+	}
+	return err
+}
+
+func GRPCStreamServerInterceptor(tc *Client) grpc.StreamServerInterceptor {
+	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		md, _ := metadata.FromIncomingContext(ss.Context())
+		if header, ok := md[grpcMetadataKey]; ok {
+			span := tc.SpanFromHeader("", strings.Join(header, ""))
+			ctx := NewContext(ss.Context(), span)
+			ss = &ServerStreamWrapper{stream: ss, span: span, context: ctx}
+		}
+		return handler(srv, ss)
+	}
 }
